@@ -1,0 +1,14 @@
+Mesh /Users/Angel/Documents/3DPointCloud/code/reduced_chair.ply loaded has 1445 vn 1415 fn
+Apply FilterScript: '/Users/Angel/Documents/3DPointCloud/code/TEMP3D_measure_topology.mlx'
+Starting Script of 1 actionsfilter: Compute Topological Measures
+V:   1445 E:   2633 F:  1415
+Unreferenced Vertices 0
+Boundary Edges 1304
+Mesh is composed by 339 connected component(s)
+
+Mesh has 171 non two manifold edges and 463 faces are incident on these edges
+
+Mesh has 118 non two manifold vertexes and 413 faces are incident on these vertices
+
+Mesh has a undefined number of holes (non 2-manifold mesh)
+Genus is undefined (non 2-manifold mesh)
