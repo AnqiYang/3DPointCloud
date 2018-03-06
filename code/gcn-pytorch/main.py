@@ -44,10 +44,9 @@ class GraphicalConv2d(nn.Module):
             nn.init.constant(self.bias.data, 0)
 
         self.weights = nn.Parameter(torch.Tensor(input_dim, output_dim, order_num + 1))
-        #np.random.seed(10)
-        nn.init.xavier_normal(self.weights.data)
         #for i in range(self.order_num + 1):
-        #    self.weights[:, :, i].data = torch.from_numpy(np.random.rand(input_dim, output_dim))
+        #    self.weights[:,:,i].data = torch.ones(input_dim, output_dim)
+        nn.init.xavier_normal(self.weights.data)
 
     def forward(self, x, adj):
         x = self.dropout(x)
@@ -72,13 +71,12 @@ class GCNNet(nn.Module):
                                     featureless=False, order_num=order_num)
         self.gcn2 = GraphicalConv2d(hidden1, output_dim, act=lambda x: x, dropout=dropout, is_bias=True, 
                                     featureless=False, order_num=order_num)
-#        self.softmax = nn.Softmax()
+        self.softmax = nn.Softmax(dim=1)
 
-    def forward(self, x, adj, mask):
+    def forward(self, x, adj):
         x = self.gcn1(x, adj)
         x = self.gcn2(x, adj)
-#        x = self.softmax(x)
-        x = mask.mm(x)
+        x = self.softmax(x)
         return x
 
 # load train/test data
@@ -92,57 +90,71 @@ input_dim = features.shape[1]
 output_dim = y_train.shape[1]
 num_sample = y_train.shape[0]
 
-
-for dropout in np.arange(10)/10:
+for dropout in np.arange(1)/10:
 
     model = GCNNet(input_dim, output_dim, hidden1=8, dropout=dropout, order_num=2)
 
     # define optimizer
-    optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=5e-4)
-    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=0.)
 
     if dropout == 0:
-        mask = np.diag(train_mask)[0:np.sum(train_mask), :].astype(np.float32)
-        y_train = np.where(np.dot(mask, y_train.data))[1]
+        #mask = np.diag(train_mask)[0:np.sum(train_mask), :].astype(np.float32)
+        #y_train = np.where(np.dot(mask, y_train.data))[1]
 
         # define train()
+        #dtype = torch.FloatTensor
+        #features = Variable(torch.from_numpy(features).type(dtype), requires_grad=False)
+        #y_train = Variable(torch.from_numpy(y_train).type(torch.LongTensor), requires_grad=False)
+        #adj = Variable(torch.from_numpy(adj).type(dtype), requires_grad=False)
+        #mask = Variable(torch.from_numpy(mask).type(dtype), requires_grad=False)
+            
         dtype = torch.FloatTensor
+        train_mask = train_mask.astype(np.float32)
+        num_train = np.sum(train_mask)
         features = Variable(torch.from_numpy(features).type(dtype), requires_grad=False)
-        y_train = Variable(torch.from_numpy(y_train).type(torch.LongTensor), requires_grad=False)
+        y_train = Variable(torch.from_numpy(y_train).type(dtype), requires_grad=False)
         adj = Variable(torch.from_numpy(adj).type(dtype), requires_grad=False)
-        mask = Variable(torch.from_numpy(mask).type(dtype), requires_grad=False)
+        train_mask = Variable(torch.from_numpy(train_mask).type(dtype), requires_grad=False)
 
-    num_train = len(y_train)
+    #num_train = len(y_train)
+    for t in range(args.epochs):
+    #for t in range(150):
+        output = model(features, adj)
 
-    #for t in range(args.epochs):
-    for t in range(150):
-        output = model(features, adj, mask)
-        # masked cross_entropy loss
-        # loss = torch.sum(-y_train * torch.log(output+1e-9)) / torch.sum(y_train)
-        loss = criterion(output, y_train)
+        # compute loss
+        loss = -y_train.mm((output.t()+1e-9).log()).mean()
+        #loss = (y_train - output).pow(2).mean()
+        # compute accuracy
+        #softmax = nn.Softmax(dim=0)
         _, predict = torch.max(output.data, 1)
-    
-    
-        acc = (predict == y_train.data).sum() / num_train
+        _, labels = torch.max(y_train.data, 1) 
+        
+        acc = (predict == labels).float().mul_(train_mask.data).sum()
         print(t, loss.data[0], acc)
 
+        # backward
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
     # todo: define test()
     if dropout == 0.:
-        mask_test = np.diag(test_mask)[-np.sum(test_mask):, :].astype(np.float32)
-        y_test = np.where(np.dot(mask_test, y_test))[1]
+        #mask_test = np.diag(test_mask)[-np.sum(test_mask):, :].astype(np.float32)
+        #y_test = np.where(np.dot(mask_test, y_test))[1]
 
-        mask_test = Variable(torch.from_numpy(mask_test).type(dtype))
-        y_test = Variable(torch.from_numpy(y_test).type(torch.LongTensor), requires_grad=False)
+        #mask_test = Variable(torch.from_numpy(mask_test).type(dtype))
+        #y_test = Variable(torch.from_numpy(y_test).type(torch.LongTensor), requires_grad=False)
+        
+        test_mask = test_mask.astype(np.float32)
+        num_test = np.sum(test_mask)
+        y_test = Variable(torch.from_numpy(y_test).type(dtype), requires_grad=False)
+        test_mask = Variable(torch.from_numpy(test_mask).type(dtype), requires_grad=False)
 
-    num_test = len(y_test)
+    output = model(features, adj)
+    softmax_output = F.softmax(output)
+    _, predict = torch.max(softmax_output.data, 1)
+    _, labels = torch.max(y_test.data, 1)
+    
+    acc = (predict == labels).float().mul_(test_mask.data).sum() / num_test
 
-    output = model(features, adj, mask_test)
-    _, predict = torch.max(output.data, 1)
-
-    masked_acc = (predict == y_test.data).sum() / num_test
-
-    print('dropout=%.1f, Evaluate Accuracy=%.8f' % (dropout, masked_acc))
+    print('dropout=%.1f, Evaluate Accuracy=%.8f' % (dropout, acc))
