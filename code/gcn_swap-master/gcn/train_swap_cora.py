@@ -26,8 +26,16 @@ flags.DEFINE_integer('max_degree', 3, 'Maximum Chebyshev polynomial degree.')
 def main(order_num, dropout, hidden_num):
     # Load data
     adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask = load_data(FLAGS.dataset)
+
     # Some preprocessing
     features = preprocess_features(features)
+    #todo:
+    #print(features[1])
+    #exit(0)
+
+    #features = np.loadtxt('../../gcn-pytorch/features.txt', delimiter=',')
+    #adj = np.loadtxt('../../gcn-pytorch/adj.txt', delimiter=',')
+
     if FLAGS.model == 'gcn':
         support = [preprocess_adj(adj)]
         num_supports = 1
@@ -48,6 +56,7 @@ def main(order_num, dropout, hidden_num):
         raise ValueError('Invalid argument for model: ' + str(FLAGS.model))
     
     # Define placeholders
+    # todo
     placeholders = {
         'support': [tf.sparse_placeholder(tf.float32) for _ in range(num_supports)],
         'features': tf.sparse_placeholder(tf.float32, shape=tf.constant(features[2], dtype=tf.int64)),
@@ -56,7 +65,18 @@ def main(order_num, dropout, hidden_num):
         'dropout': tf.placeholder_with_default(0., shape=()),
         'num_features_nonzero': tf.placeholder(tf.int32)  # helper variable for sparse dropout
     }
-    
+    '''
+    placeholders = {
+            'support': [tf.placeholder(tf.float32) for _ in range(num_supports)],
+            'features': tf.placeholder(tf.float32, shape=(features.shape[0], features.shape[1])),
+            'labels': tf.placeholder(tf.float32, shape=(None, y_train.shape[1])),
+            'labels_mask': tf.placeholder(tf.int32),
+            'dropout':tf.placeholder_with_default(0., shape=()),
+            'num_features_nonzero': tf.placeholder(tf.int32)
+            }
+    '''
+    print(features)
+    exit(0)
     # Create model
     model = model_func(placeholders, input_dim=features[2][1], order_num=order_num, hidden1=hidden_num, logging=True)
     
@@ -79,21 +99,29 @@ def main(order_num, dropout, hidden_num):
     
     # Train model
     for epoch in range(FLAGS.epochs):
-    
+    # todo
+    #for epoch in range(10):
         t = time.time()
         # Construct feed dictionary
         feed_dict = construct_feed_dict(features, support, y_train, train_mask, placeholders)
         feed_dict.update({placeholders['dropout']: dropout})
     
         # Training step
+        #outs = sess.run([model.activations[1], model.activations[2], model.opt_op, model.loss, model.accuracy, model.vars], feed_dict=feed_dict)
         outs = sess.run([model.opt_op, model.loss, model.accuracy], feed_dict=feed_dict)
-    
+        #print('     gcn1 layer:', outs[0].shape, (outs[0]))
+        #print('     gcn2 layer:', outs[1].shape, (outs[1]))
+        print('%d %.12f %.12f' % (epoch, outs[1], outs[2]))
+        
         # Validation
-        cost, acc, duration = evaluate(features, support, y_val, val_mask, placeholders)
-        cost_val.append(cost)
+        #todo
+        #cost, acc, duration = evaluate(features, support, y_val, val_mask, placeholders)
+        #cost_val.append(cost)
     
-        if epoch > FLAGS.early_stopping and cost_val[-1] > np.mean(cost_val[-(FLAGS.early_stopping+1):-1]):
-            break
+        #todo
+        #if epoch > FLAGS.early_stopping and cost_val[-1] > np.mean(cost_val[-(FLAGS.early_stopping+1):-1]):
+        #    print('cost_val[-1]=%.12f, mean(cost_val[last 20]=%.12f)' % (cost_val[-1], np.mean(cost_val[-(FLAGS.early_stopping+1):-1])))
+        #    break
     
     # Testing
     test_cost, test_acc, test_duration = evaluate(features, support, y_test, test_mask, placeholders)
@@ -114,14 +142,15 @@ def recursive_swap(swap_list, call_func, results, swap_index, input_index_list):
 
 def run(seed):
     print('seed: ', seed)
-    np.random.seed(seed)
-    tf.set_random_seed(seed)
+    #np.random.seed(seed)
+    #tf.set_random_seed(seed)
     swap_list = list()
-    order_num = [2, 3]   # revise byshz [1,2,3,4]
+    order_num = [2]   # todo # revise byshz [1,2,3,4]
     swap_list.append(order_num)
-    dropout = [i/10 for i in range(10)]
+    dropout = [0.]
+    #dropout = [i/10 for i in range(10)] #todo
     swap_list.append(dropout)
-    hidden_num = [16]
+    hidden_num = [8]
     swap_list.append(hidden_num)
 
     dimention = [len(h) for h in swap_list]
@@ -131,7 +160,7 @@ def run(seed):
 
 
 if __name__ == "__main__":
-    for i in range(2):
+    for i in range(1):
         # seed = i + 100
         seed = 123
         p = Process(target=run, args=(seed, ))

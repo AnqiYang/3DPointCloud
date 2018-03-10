@@ -184,6 +184,8 @@ class GCNOur(Model):
         self.input_dim = input_dim
         # self.input_dim = self.inputs.get_shape().as_list()[1]  # To be supported in future Tensorflow versions
         self.output_dim = placeholders['labels'].get_shape().as_list()[1]
+        # todo
+        #print('Ouput-dim=' + str(self.output_dim))
         self.placeholders = placeholders
 
         self.optimizer = tf.train.AdamOptimizer(learning_rate=FLAGS.learning_rate)
@@ -194,8 +196,8 @@ class GCNOur(Model):
 
     def _loss(self):
         # Weight decay loss
-        for var in self.layers[0].vars.values():
-            self.loss += FLAGS.weight_decay * tf.nn.l2_loss(var)
+        #for var in self.layers[0].vars.values():
+        #    self.loss += FLAGS.weight_decay * tf.nn.l2_loss(var)
 
         # Cross entropy error
         self.loss += masked_softmax_cross_entropy(self.outputs, self.placeholders['labels'],
@@ -212,6 +214,7 @@ class GCNOur(Model):
                                             act=tf.nn.relu,
                                             dropout=True,
                                             sparse_inputs=True,
+                                            #todo:sparse_inputs=False,
                                             bias=True,
                                             order_num=self.order_num,
                                             logging=self.logging))

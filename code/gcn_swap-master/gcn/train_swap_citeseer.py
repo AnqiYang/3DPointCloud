@@ -87,12 +87,14 @@ def main(order_num, dropout, hidden_num):
     
         # Training step
         outs = sess.run([model.opt_op, model.loss, model.accuracy], feed_dict=feed_dict)
-    
+        print(epoch)
+        print(outs)   
         # Validation
         cost, acc, duration = evaluate(features, support, y_val, val_mask, placeholders)
         cost_val.append(cost)
-    
+        
         if epoch > FLAGS.early_stopping and cost_val[-1] > np.mean(cost_val[-(FLAGS.early_stopping+1):-1]):
+            print('!!!!final epoch=', epoch)
             break
     
     # Testing
@@ -119,7 +121,9 @@ def run(seed):
     swap_list = list()
     order_num = [2]   # revise byshz [1,2,3,4]
     swap_list.append(order_num)
-    dropout = [i/10 for i in range(10)]
+    #dropout = [i/10 for i in range(10)]
+    #todo
+    dropout = [0.]
     swap_list.append(dropout)
     hidden_num = [8]
     swap_list.append(hidden_num)
