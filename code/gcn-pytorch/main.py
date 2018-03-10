@@ -12,16 +12,16 @@ from utils import *
 
 # define train settings
 parser = argparse.ArgumentParser(description='PyTorch GCN')
-parser.add_argument('--epochs', type=int, default=200, metavar='N')
+parser.add_argument('--epochs', type=int, default=2000, metavar='N')
 parser.add_argument('--lr', type=float, default=0.01, metavar='LR')
-parser.add_argument('--weight-decay', type=float, default=5e-4, metavar='W')
+parser.add_argument('--weight_decay', type=float, default=5e-4, metavar='W')
 parser.add_argument('--hidden1', type=int, default=16, metavar='H',
                     help='Number of units in hidden layer 1.')
-parser.add_argument('--dropout', type=float, default=0.8, metavar='N',
+parser.add_argument('--dropout', type=float, default=0.4, metavar='N',
                     help='Dropout rate (1 - keep probability)')
-parser.add_argument('--order-num', type=int, default=2, metavar='N',
+parser.add_argument('--order_num', type=int, default=2, metavar='N',
                     help='Order num of Adjacency matrix')
-parser.add_argument('--early-stopping', type=int, default=300, metavar='E',
+parser.add_argument('--early_stopping', type=int, default=20, metavar='E',
                     help='Tolerance for early stopping.')
 args = parser.parse_args()
 
@@ -41,10 +41,10 @@ class GraphicalConv2d(nn.Module):
         self.act = act
 
         if self.is_bias:
-            self.bias = nn.Parameter(torch.Tensor(output_dim))
+            self.bias = nn.Parameter(torch.cuda.FloatTensor(output_dim))
             nn.init.constant(self.bias.data, 0.)
 
-        self.weights = nn.Parameter(torch.Tensor(input_dim, output_dim, order_num + 1))
+        self.weights = nn.Parameter(torch.cuda.FloatTensor(input_dim, output_dim, order_num + 1))
         #nn.init.constant(self.weights.data, 1.)
         #self.weights.data = torch.from_numpy(np.ones((input_dim, output_dim, order_num+1), dtype=np.float32))
         nn.init.xavier_normal(self.weights.data)
@@ -54,7 +54,7 @@ class GraphicalConv2d(nn.Module):
 
     def forward(self, x, adj):
         #todo:
-        #x = self.dropout(x)
+        # x = self.dropout(x)
         if not self.featureless:
             output = x.mm(self.weights[:, :, 0])
         for i in range(self.order_num):
@@ -93,7 +93,6 @@ class GCNNet(nn.Module):
 #        x = mask.mm(x)
         return x
 
-
 average_acc = 0
 for i in np.arange(100):
     # load train/test data
@@ -124,7 +123,7 @@ for i in np.arange(100):
 
     #exit(0)
 
-    model = GCNNet(input_dim, output_dim, hidden1=8, dropout=0.4, order_num=2)
+    model = GCNNet(input_dim, output_dim, hidden1=8, dropout=args.dropout, order_num=2)
 
     # define optimizer
     optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=5e-4)
@@ -135,7 +134,7 @@ for i in np.arange(100):
     #y_train = np.where(np.dot(mask, y_train.data))[1]
 
         # define train()
-    dtype = torch.FloatTensor
+    dtype = torch.cuda.FloatTensor
         #features = Variable(torch.from_numpy(features).type(dtype), requires_grad=False)
         #y_train = Variable(torch.from_numpy(y_train).type(torch.LongTensor), requires_grad=False)
         #adj = Variable(torch.from_numpy(adj).type(dtype), requires_grad=False)
@@ -153,7 +152,13 @@ for i in np.arange(100):
     num_train = torch.sum(train_mask)
     num_test = torch.sum(test_mask)
 
+    # todo:
+    y_val = Variable(torch.from_numpy(y_val).type(dtype), requires_grad=False)
+    val_mask = val_mask.astype(np.float32)
+    val_mask = Variable(torch.from_numpy(val_mask).type(dtype), requires_grad=False)
+
     # train
+    val_losses = []
     for t in range(args.epochs):
     #for t in range(120):
         output = model(features, adj)
@@ -172,8 +177,18 @@ for i in np.arange(100):
         loss.backward()
         optimizer.step()
 
+        # todo
+        # validation
+        val_loss = torch.sum(-torch.trace(y_val.mm(torch.log(output.t()+1e-32)))) / torch.sum(y_val)
+        weight_loss = torch.norm(model.gcn1.weights.data) + torch.norm(model.gcn1.bias.data) +\
+                      torch.norm(model.gcn1.weights.data) + torch.norm(model.gcn2.bias.data)
+        val_losses.append(val_loss.data[0] + args.weight_decay * weight_loss)
+        if t > args.early_stopping and val_losses[-1] > np.mean(val_losses[-(args.early_stopping+1):-1]):
+            break
+
+
     # test
-    #dropout_fn = nn.Dropout(p=0.4)
+    #dropout_fn = nn.Dropout(p=args.dropout)
     #features = dropout_fn(features)
     output = model(features, adj)
     predict = torch.max(output.data, 1, keepdim=True)[1].type(dtype)
@@ -181,7 +196,7 @@ for i in np.arange(100):
 
     test_acc = (predict == labels).float().mul_(test_mask.data).sum() / num_test
     
-    dropout = 0.4
+    dropout = args.dropout
     print('dropout=%.1f, Evaluate Accuracy=%.8f' % (dropout, test_acc.data[0]))
     average_acc += test_acc.data[0]
 
