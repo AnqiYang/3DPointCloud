@@ -1,5 +1,6 @@
 from inits import *
 import tensorflow as tf
+import numpy as np
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS
@@ -206,16 +207,21 @@ class GraphConvolutionOur(Layer):
         self.featureless = featureless
         self.bias = bias
         self.order_num = order_num
+        self.input_dim = input_dim
 
         # helper variable for sparse dropout
         self.num_features_nonzero = placeholders['num_features_nonzero']
-
+        
+        #np.random.seed(10)
         with tf.variable_scope(self.name + '_vars'):
-            self.vars['weights_' + str(100)] = glorot([input_dim, output_dim],
-                                                    name='weights_' + str(100))
+            self.vars['weights_' + str(100)] = tf.ones([input_dim, output_dim], name='weights_'+str(100))
+            #self.vars['weights_' + str(100)] = glorot([input_dim, output_dim],
+            #                                        name='weights_' + str(100))
             for i in range(self.order_num):
-                self.vars['weights_' + str(i)] = glorot([input_dim, output_dim],
-                                                        name='weights_' + str(i))
+                self.vars['weights_' + str(i)] = tf.ones([input_dim, output_dim], name='weights_'+str(i))    
+            #    self.vars['weights_' + str(i)] = glorot([input_dim, output_dim],
+            #                                           name='weights_' + str(i))
+            #self.vars['weights_50'] = tf.eye(input_dim, name='weights_50')
             if self.bias:
                 self.vars['bias'] = zeros([output_dim], name='bias')
 
@@ -224,20 +230,25 @@ class GraphConvolutionOur(Layer):
 
     def _call(self, inputs):
         x = inputs
-
+        # todo
         # dropout
         if self.sparse_inputs:
+            pass
             x = sparse_dropout(x, 1-self.dropout, self.num_features_nonzero)
         else:
+            pass
             x = tf.nn.dropout(x, 1-self.dropout)
-
+        
         # convolve
         order_list = list()
+        
         pre_sup = dot(x, self.vars['weights_' + str(100)],
                       sparse=self.sparse_inputs)
-
+    
         order_list.append(pre_sup)
+        
         for i in range(self.order_num):
+        #for i in range(1):
             if not self.featureless:
                 pre_sup = dot(x, self.vars['weights_' + str(i)],
                               sparse=self.sparse_inputs)
@@ -246,17 +257,18 @@ class GraphConvolutionOur(Layer):
 
             for j in range(i + 1):
                 pre_sup = dot(self.support[0], pre_sup, sparse=True)
-
+            
             order_list.append(pre_sup)
-
+        
         output = tf.add_n(order_list)
 
         # bias
         if self.bias:
-            output += self.vars['bias']
-
-        return self.act(output)
-
+            #output += self.vars['bias']
+            output = tf.add(output, self.vars['bias'])
+        
+        output = self.act(output)
+        return output
 
 class GraphConvolutionSingleKernel(Layer):
     """Graph convolution layer."""
